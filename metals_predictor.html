@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MetalsMind — AI Price Intelligence</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #0A0A0F;
+  --surface:  #12121A;
+  --surface2: #1A1A26;
+  --border:   #2A2A3A;
+  --border2:  #3A3A50;
+  --text:     #E8E8F0;
+  --muted:    #8888A8;
+  --hint:     #55556A;
+  --gold:     #C9952A;
+  --gold-l:   #F0C060;
+  --gold-dim: #7A5A18;
+  --silver-c: #A8B4C8;
+  --silver-l: #D0D8E8;
+  --copper-c: #C07848;
+  --copper-l: #E0A878;
+  --up:       #3DBE8A;
+  --down:     #E05858;
+  --r: 6px;
+}
+
+html { scroll-behavior: smooth; }
+body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 14px; line-height: 1.6; overflow-x: hidden; }
+
+/* NAV */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 2rem; height: 56px;
+  background: rgba(10,10,15,0.85); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+.nav-logo { font-family: 'Instrument Serif', serif; font-size: 18px; color: var(--gold-l); letter-spacing: 0.02em; }
+.nav-logo span { font-style: italic; }
+.nav-links { display: flex; gap: 2rem; }
+.nav-links a { color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 500; transition: color 0.15s; }
+.nav-links a:hover { color: var(--text); }
+.nav-badge { font-family: 'DM Mono', monospace; font-size: 11px; padding: 3px 10px; border-radius: 20px; border: 1px solid var(--gold-dim); color: var(--gold); }
+
+/* HERO */
+.hero {
+  min-height: 100vh; display: flex; flex-direction: column;
+  justify-content: center; padding: 80px 2rem 4rem;
+  position: relative; overflow: hidden;
+}
+.hero-grid {
+  position: absolute; inset: 0; opacity: 0.04;
+  background-image: linear-gradient(var(--border) 1px, transparent 1px),
+                    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+.hero-glow {
+  position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
+  width: 600px; height: 300px; border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(201,149,42,0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-content { max-width: 900px; margin: 0 auto; position: relative; z-index: 1; }
+.hero-eyebrow { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--gold); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 1.5rem; }
+.hero-title { font-family: 'Instrument Serif', serif; font-size: clamp(42px, 6vw, 72px); line-height: 1.05; color: var(--text); margin-bottom: 1.5rem; }
+.hero-title em { font-style: italic; color: var(--gold-l); }
+.hero-sub { font-size: 16px; color: var(--muted); max-width: 520px; line-height: 1.7; margin-bottom: 3rem; }
+
+/* TICKER */
+.ticker-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 3rem; }
+.ticker-card {
+  flex: 1; min-width: 180px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 1.25rem 1.5rem;
+  cursor: pointer; transition: border-color 0.2s, transform 0.15s;
+  position: relative; overflow: hidden;
+}
+.ticker-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+}
+.ticker-card.gold::before { background: var(--gold); }
+.ticker-card.silver::before { background: var(--silver-c); }
+.ticker-card.copper::before { background: var(--copper-c); }
+.ticker-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+.ticker-symbol { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); letter-spacing: 0.1em; margin-bottom: 6px; }
+.ticker-name { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.ticker-price { font-family: 'DM Mono', monospace; font-size: 22px; font-weight: 500; }
+.ticker-card.gold .ticker-price { color: var(--gold-l); }
+.ticker-card.silver .ticker-price { color: var(--silver-l); }
+.ticker-card.copper .ticker-price { color: var(--copper-l); }
+.ticker-change { font-family: 'DM Mono', monospace; font-size: 12px; margin-top: 4px; }
+.ticker-change.up { color: var(--up); }
+.ticker-change.down { color: var(--down); }
+.ticker-unit { font-size: 11px; color: var(--hint); margin-top: 4px; }
+
+/* SECTIONS */
+section { padding: 5rem 2rem; }
+.section-inner { max-width: 1000px; margin: 0 auto; }
+.section-label { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--gold); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 1rem; }
+.section-title { font-family: 'Instrument Serif', serif; font-size: clamp(28px, 4vw, 42px); margin-bottom: 1rem; line-height: 1.15; }
+.section-sub { color: var(--muted); max-width: 560px; line-height: 1.7; margin-bottom: 3rem; }
+
+/* METALS INFO */
+.metals-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; }
+.metal-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 2rem; position: relative; overflow: hidden;
+}
+.metal-card-icon { font-size: 32px; margin-bottom: 1rem; }
+.metal-card-name { font-size: 18px; font-weight: 600; margin-bottom: 0.5rem; }
+.metal-card-desc { font-size: 13px; color: var(--muted); line-height: 1.7; margin-bottom: 1.5rem; }
+.metal-facts { display: flex; flex-direction: column; gap: 8px; }
+.metal-fact { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.metal-fact:last-child { border-bottom: none; }
+.metal-fact label { color: var(--muted); }
+.metal-fact span { font-family: 'DM Mono', monospace; font-weight: 500; }
+.metal-card.gold-card { border-top: 2px solid var(--gold); }
+.metal-card.silver-card { border-top: 2px solid var(--silver-c); }
+.metal-card.copper-card { border-top: 2px solid var(--copper-c); }
+
+/* DIVIDER */
+.divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+
+/* PREDICTIONS */
+#predictions { background: var(--surface); }
+.pred-layout { display: grid; grid-template-columns: 280px 1fr; gap: 2rem; align-items: start; }
+.pred-controls { position: sticky; top: 72px; }
+.control-group { margin-bottom: 1.5rem; }
+.control-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; font-family: 'DM Mono', monospace; margin-bottom: 10px; display: block; }
+.metal-btns { display: flex; flex-direction: column; gap: 6px; }
+.metal-btn {
+  padding: 10px 14px; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--r); cursor: pointer; font-family: 'Inter', sans-serif;
+  font-size: 13px; font-weight: 500; color: var(--muted); text-align: left;
+  transition: all 0.15s; display: flex; align-items: center; gap: 10px;
+}
+.metal-btn:hover { border-color: var(--border2); color: var(--text); }
+.metal-btn.active { color: var(--text); }
+.metal-btn.active.gold-btn { border-color: var(--gold); background: rgba(201,149,42,0.08); color: var(--gold-l); }
+.metal-btn.active.silver-btn { border-color: var(--silver-c); background: rgba(168,180,200,0.08); color: var(--silver-l); }
+.metal-btn.active.copper-btn { border-color: var(--copper-c); background: rgba(192,120,72,0.08); color: var(--copper-l); }
+.metal-dot { width: 8px; height: 8px; border-radius: 50%; }
+.gold-dot { background: var(--gold); }
+.silver-dot { background: var(--silver-c); }
+.copper-dot { background: var(--copper-c); }
+
+.interval-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.interval-btn {
+  padding: 8px; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--r); cursor: pointer; font-family: 'DM Mono', monospace;
+  font-size: 12px; color: var(--muted); text-align: center; transition: all 0.15s;
+}
+.interval-btn:hover { border-color: var(--border2); color: var(--text); }
+.interval-btn.active { border-color: var(--gold); background: rgba(201,149,42,0.1); color: var(--gold-l); }
+
+.pred-main { min-width: 0; }
+.pred-result-card {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 2rem; margin-bottom: 1.5rem;
+}
+.pred-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; }
+.pred-metal-name { font-family: 'Instrument Serif', serif; font-size: 24px; }
+.pred-interval-badge { font-family: 'DM Mono', monospace; font-size: 11px; padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border2); color: var(--muted); }
+.pred-numbers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+.pred-num { background: var(--surface); border-radius: var(--r); padding: 1rem; }
+.pred-num label { font-size: 11px; color: var(--hint); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 6px; font-family: 'DM Mono', monospace; }
+.pred-num .val { font-family: 'DM Mono', monospace; font-size: 18px; font-weight: 500; }
+.pred-num .val.up { color: var(--up); }
+.pred-num .val.down { color: var(--down); }
+.pred-num .val.neutral { color: var(--gold-l); }
+
+/* CONFIDENCE BAR */
+.conf-bar-wrap { margin-bottom: 1.5rem; }
+.conf-bar-wrap label { font-size: 11px; color: var(--hint); text-transform: uppercase; letter-spacing: 0.05em; font-family: 'DM Mono', monospace; display: block; margin-bottom: 8px; }
+.conf-bar { height: 3px; background: var(--surface2); border-radius: 2px; overflow: hidden; margin-bottom: 4px; }
+.conf-fill { height: 100%; border-radius: 2px; background: var(--gold); transition: width 0.6s ease; }
+.conf-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--hint); font-family: 'DM Mono', monospace; }
+
+/* RANGE BAR */
+.range-visual { display: flex; align-items: center; gap: 12px; margin-bottom: 1.5rem; }
+.range-val { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.range-bar-wrap { flex: 1; position: relative; height: 4px; background: var(--surface2); border-radius: 2px; }
+.range-fill { position: absolute; height: 100%; border-radius: 2px; background: linear-gradient(90deg, var(--down), var(--up)); }
+.range-marker { position: absolute; width: 2px; height: 12px; background: var(--gold-l); top: -4px; border-radius: 1px; }
+
+/* CHART */
+.chart-wrap { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 1.5rem; }
+.chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.chart-title { font-size: 13px; font-weight: 600; }
+.chart-legend { display: flex; gap: 1rem; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
+.legend-dot { width: 8px; height: 2px; border-radius: 1px; }
+canvas { width: 100% !important; height: 220px !important; }
+
+/* MODEL ACCURACY */
+.accuracy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+.accuracy-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 1.5rem;
+}
+.accuracy-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 1.5rem; }
+.accuracy-card-dot { width: 10px; height: 10px; border-radius: 50%; }
+.accuracy-card-name { font-weight: 600; font-size: 15px; }
+.accuracy-metrics { display: flex; flex-direction: column; gap: 10px; }
+.accuracy-row { display: flex; justify-content: space-between; align-items: center; }
+.accuracy-row label { font-size: 12px; color: var(--muted); }
+.accuracy-row .metric-val { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; }
+.metric-bar-wrap { flex: 1; margin: 0 12px; height: 2px; background: var(--surface2); border-radius: 1px; }
+.metric-bar-fill { height: 100%; border-radius: 1px; background: var(--gold); }
+
+/* HOW IT WORKS */
+.how-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; }
+.how-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 1.5rem;
+}
+.how-step { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--gold); margin-bottom: 0.75rem; }
+.how-title { font-size: 15px; font-weight: 600; margin-bottom: 0.5rem; }
+.how-desc { font-size: 12px; color: var(--muted); line-height: 1.7; }
+
+/* FOOTER */
+footer {
+  padding: 2rem; border-top: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 1rem;
+}
+.footer-left { font-family: 'Instrument Serif', serif; font-size: 16px; color: var(--gold-l); }
+.footer-right { font-size: 12px; color: var(--hint); }
+.disclaimer { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 1rem 1.5rem; font-size: 12px; color: var(--hint); line-height: 1.6; margin: 0 2rem 2rem; }
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+@media (max-width: 768px) {
+  .pred-layout { grid-template-columns: 1fr; }
+  .pred-controls { position: static; }
+  .pred-numbers { grid-template-columns: 1fr 1fr; }
+  .nav-links { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">Metals<span>Mind</span></div>
+  <div class="nav-links">
+    <a href="#markets">Markets</a>
+    <a href="#predictions">Predictions</a>
+    <a href="#accuracy">Accuracy</a>
+    <a href="#model">Model</a>
+  </div>
+  <div class="nav-badge">AI · CNN+LSTM</div>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="home">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-eyebrow">Deep Learning · Commodity Intelligence</div>
+    <h1 class="hero-title">Price intelligence for<br><em>precious metals</em></h1>
+    <p class="hero-sub">CNN + LSTM neural networks trained on 25 years of market data. Predicts Gold, Silver and Copper prices across four time horizons with confidence ranges.</p>
+
+    <div class="ticker-row">
+      <div class="ticker-card gold" onclick="selectMetal('gold'); document.getElementById('predictions').scrollIntoView({behavior:'smooth'})">
+        <div class="ticker-symbol">XAU/USD · COMEX</div>
+        <div class="ticker-name">Gold</div>
+        <div class="ticker-price">$4,172.90</div>
+        <div class="ticker-change up">↑ +0.62% today</div>
+        <div class="ticker-unit">per troy ounce</div>
+      </div>
+      <div class="ticker-card silver" onclick="selectMetal('silver'); document.getElementById('predictions').scrollIntoView({behavior:'smooth'})">
+        <div class="ticker-symbol">XAG/USD · COMEX</div>
+        <div class="ticker-name">Silver</div>
+        <div class="ticker-price">$66.32</div>
+        <div class="ticker-change down">↓ -0.31% today</div>
+        <div class="ticker-unit">per troy ounce</div>
+      </div>
+      <div class="ticker-card copper" onclick="selectMetal('copper'); document.getElementById('predictions').scrollIntoView({behavior:'smooth'})">
+        <div class="ticker-symbol">HG/USD · COMEX</div>
+        <div class="ticker-name">Copper</div>
+        <div class="ticker-price">$6.337</div>
+        <div class="ticker-change up">↑ +0.43% today</div>
+        <div class="ticker-unit">per pound</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- MARKETS -->
+<section id="markets">
+  <div class="section-inner">
+    <div class="section-label">Market Overview</div>
+    <h2 class="section-title">The metals we track</h2>
+    <p class="section-sub">Three of the world's most actively traded commodities, each with distinct market dynamics and industrial applications.</p>
+
+    <div class="metals-grid">
+      <div class="metal-card gold-card">
+        <div class="metal-card-icon">🥇</div>
+        <div class="metal-card-name" style="color:var(--gold-l)">Gold</div>
+        <div class="metal-card-desc">The ultimate safe-haven asset. Central banks hold over 35,000 tonnes globally. Price driven by inflation, interest rates, geopolitical uncertainty and dollar strength.</div>
+        <div class="metal-facts">
+          <div class="metal-fact"><label>Ticker</label><span style="color:var(--gold)">GC=F (XAU)</span></div>
+          <div class="metal-fact"><label>Unit</label><span>USD per troy oz</span></div>
+          <div class="metal-fact"><label>2000 price</label><span>$273</span></div>
+          <div class="metal-fact"><label>2026 price</label><span style="color:var(--gold-l)">$4,172</span></div>
+          <div class="metal-fact"><label>25yr return</label><span style="color:var(--up)">+1,428%</span></div>
+          <div class="metal-fact"><label>Daily volatility</label><span>~0.8%</span></div>
+          <div class="metal-fact"><label>Model MAPE</label><span style="color:var(--up)">0.98%</span></div>
+        </div>
+      </div>
+
+      <div class="metal-card silver-card">
+        <div class="metal-card-icon">🥈</div>
+        <div class="metal-card-name" style="color:var(--silver-l)">Silver</div>
+        <div class="metal-card-desc">Both an investment metal and critical industrial material. Used in solar panels, electronics and medical devices. More volatile than gold due to smaller market size.</div>
+        <div class="metal-facts">
+          <div class="metal-fact"><label>Ticker</label><span style="color:var(--silver-c)">SI=F (XAG)</span></div>
+          <div class="metal-fact"><label>Unit</label><span>USD per troy oz</span></div>
+          <div class="metal-fact"><label>2000 price</label><span>$4.95</span></div>
+          <div class="metal-fact"><label>2026 price</label><span style="color:var(--silver-l)">$66.32</span></div>
+          <div class="metal-fact"><label>25yr return</label><span style="color:var(--up)">+1,239%</span></div>
+          <div class="metal-fact"><label>Daily volatility</label><span>~1.5%</span></div>
+          <div class="metal-fact"><label>Model MAPE</label><span style="color:var(--up)">1.65%</span></div>
+        </div>
+      </div>
+
+      <div class="metal-card copper-card">
+        <div class="metal-card-icon">🟤</div>
+        <div class="metal-card-name" style="color:var(--copper-l)">Copper</div>
+        <div class="metal-card-desc">The economic bellwether. Essential for EVs, renewable energy and construction. Demand closely tied to global manufacturing activity and China's economy.</div>
+        <div class="metal-facts">
+          <div class="metal-fact"><label>Ticker</label><span style="color:var(--copper-c)">HG=F (XCU)</span></div>
+          <div class="metal-fact"><label>Unit</label><span>USD per pound</span></div>
+          <div class="metal-fact"><label>2000 price</label><span>$0.82</span></div>
+          <div class="metal-fact"><label>2026 price</label><span style="color:var(--copper-l)">$6.337</span></div>
+          <div class="metal-fact"><label>25yr return</label><span style="color:var(--up)">+672%</span></div>
+          <div class="metal-fact"><label>Daily volatility</label><span>~1.2%</span></div>
+          <div class="metal-fact"><label>Model MAPE</label><span style="color:var(--up)">1.47%</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- PREDICTIONS -->
+<section id="predictions">
+  <div class="section-inner">
+    <div class="section-label">AI Forecasting</div>
+    <h2 class="section-title">Price predictions</h2>
+    <p class="section-sub">Select a metal and time horizon to view the model's forecast, confidence range and historical price chart.</p>
+
+    <div class="pred-layout">
+      <!-- Controls -->
+      <div class="pred-controls">
+        <div class="control-group">
+          <span class="control-label">Metal</span>
+          <div class="metal-btns">
+            <button class="metal-btn gold-btn active" onclick="selectMetal('gold')">
+              <span class="metal-dot gold-dot"></span> Gold (XAU)
+            </button>
+            <button class="metal-btn silver-btn" onclick="selectMetal('silver')">
+              <span class="metal-dot silver-dot"></span> Silver (XAG)
+            </button>
+            <button class="metal-btn copper-btn" onclick="selectMetal('copper')">
+              <span class="metal-dot copper-dot"></span> Copper (XCU)
+            </button>
+          </div>
+        </div>
+        <div class="control-group">
+          <span class="control-label">Interval</span>
+          <div class="interval-btns">
+            <button class="interval-btn active" onclick="selectInterval('1w')">1 Week</button>
+            <button class="interval-btn" onclick="selectInterval('4w')">4 Weeks</button>
+            <button class="interval-btn" onclick="selectInterval('3m')">3 Months</button>
+            <button class="interval-btn" onclick="selectInterval('6m')">6 Months</button>
+          </div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:1rem;font-size:12px;color:var(--muted);line-height:1.6;">
+          <strong style="color:var(--text);display:block;margin-bottom:6px;">Model info</strong>
+          CNN + LSTM neural network<br>
+          Trained on 25 years of data<br>
+          23 technical features<br>
+          6,400+ training examples
+        </div>
+      </div>
+
+      <!-- Result -->
+      <div class="pred-main">
+        <div class="pred-result-card">
+          <div class="pred-header">
+            <div class="pred-metal-name" id="pred-metal-name">Gold</div>
+            <div class="pred-interval-badge" id="pred-interval-badge">1 Week Forecast</div>
+          </div>
+
+          <div class="pred-numbers">
+            <div class="pred-num">
+              <label>Current Price</label>
+              <div class="val neutral" id="pred-current">$4,172.90</div>
+            </div>
+            <div class="pred-num">
+              <label>Predicted Price</label>
+              <div class="val up" id="pred-price">$4,198.80</div>
+            </div>
+            <div class="pred-num">
+              <label>Expected Return</label>
+              <div class="val up" id="pred-return">+0.62%</div>
+            </div>
+          </div>
+
+          <div class="conf-bar-wrap">
+            <label>Confidence range (±3%)</label>
+            <div class="range-visual">
+              <span class="range-val" id="pred-low">$4,072.55</span>
+              <div class="range-bar-wrap">
+                <div class="range-fill" id="range-fill" style="left:0%;width:100%"></div>
+                <div class="range-marker" id="range-marker" style="left:50%"></div>
+              </div>
+              <span class="range-val" id="pred-high">$4,324.45</span>
+            </div>
+          </div>
+
+          <div class="conf-bar-wrap">
+            <label>Model confidence · R² score</label>
+            <div class="conf-bar"><div class="conf-fill" id="conf-fill" style="width:99.79%"></div></div>
+            <div class="conf-labels"><span>0%</span><span id="conf-label">99.79% — R² on test data</span><span>100%</span></div>
+          </div>
+        </div>
+
+        <!-- CHART -->
+        <div class="chart-wrap">
+          <div class="chart-header">
+            <div class="chart-title" id="chart-title">Gold — Historical + Forecast</div>
+            <div class="chart-legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--gold)"></div> Historical</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--up);border-top:2px dashed var(--up)"></div> Forecast</div>
+            </div>
+          </div>
+          <canvas id="predChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ACCURACY -->
+<section id="accuracy" style="background:var(--surface)">
+  <div class="section-inner">
+    <div class="section-label">Model Performance</div>
+    <h2 class="section-title">Real accuracy results</h2>
+    <p class="section-sub">Tested on 1,284 trading days the model never saw during training — data from 2021 to 2026.</p>
+
+    <div class="accuracy-grid">
+      <div class="accuracy-card">
+        <div class="accuracy-card-header">
+          <div class="accuracy-card-dot" style="background:var(--gold)"></div>
+          <div class="accuracy-card-name">Gold</div>
+        </div>
+        <div class="accuracy-metrics">
+          <div class="accuracy-row">
+            <label>MAPE (avg error)</label>
+            <div class="metric-bar-wrap"><div class="metric-bar-fill" style="width:97%;background:var(--up)"></div></div>
+            <span class="metric-val" style="color:var(--up)">0.98%</span>
+          </div>
+          <div class="accuracy-row">
+            <label>R² score</label>
+            <div class="metric-bar-wrap"><div class="metric-bar-fill" style="width:99.79%;background:var(--gold)"></div></div>
+            <span class="metric-val" style="color:var(--gold-l)">0.9979</span>
+          </div>
+          <div class="accuracy-row">
+            <label>Avg dollar error</label>
+            <div class="metric-bar-wrap"><div class="metric-bar-fill" style="width:85%"></div></div>
+            <span class="metric-val">$27.27</span>
+          </div>
+          <div class="accuracy-row">
+            <label>Direction acc.</label>
+            <div class="metric-bar-wrap"><div class="metric-bar-fill" style="width:45%;background:var(--muted)"></div></div>
+            <span class="metric-val">45.0%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="accuracy-card">
+        <div class="accuracy-card-header">
+          <div class="accuracy-card-dot" style="background:var(--silver-c)"></div>
+          <div class="accuracy-card-name">Silver</div>
+        </div>
+        <div class="accuracy-metrics">
+          <div class="accuracy-row">
+            <label>MAPE (avg error)</label>
+            <div class="metric-bar-wrap"><div class="metric-bar-fill" style="width:95%;background:var(--up)"></div></div>
+            <span class="metric-val" style="color:var(--up)">1.65%</span>
+          </div>
+          <div class="accuracy-row">
+            <label>R² score</label>
+            <div class="metric-bar-wrap"><div class="metric-bar-fill" style="width:99.27%;background:var(--silver-c)"></div></div>
+            <span class="metric-val" style="color:var(--silver-l)">0.9927</span>
+          </div>
+          <div class="accuracy-row">
+            <label>Avg dollar error</label>
+            <div class="metric-bar-wrap"><div class="metric-bar-fill" style="width:80%"></div></div>
+            <span class="metric-val">$0.66</span>
+          </div>
+          <div class="accuracy-row">
+            <label>Direction acc.</label>
+            <div class="metric-bar-wrap"><div class="metric-bar-fill" style="width:47%;background:var(--muted)"></div></div>
+            <span class="metric-val">47.2%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="accuracy-card">
+        <div class="accuracy-card-header">
+          <div class="accuracy-card-dot" style="background:var(--copper-c)"></div>
+          <div class="accuracy-card-name">Copper</div>
+        </div>
+        <div class="accuracy-metrics">
+          <div class="accuracy-row">
+            <label>MAPE (avg error)</label>
+            <div class="metric-bar-wrap"><div class="metric-bar-fill" style="width:96%;background:var(--up)"></div></div>
+            <span class="metric-val" style="color:var(--up)">1.47%</span>
+          </div>
+          <div class="accuracy-row">
+            <label>R² score</label>
+            <div class="metric-bar-wrap"><div class="metric-bar-fill" style="width:98.25%;background:var(--copper-c)"></div></div>
+            <span class="metric-val" style="color:var(--copper-l)">0.9825</span>
+          </div>
+          <div class="accuracy-row">
+            <label>Avg dollar error</label>
+            <div class="metric-bar-wrap"><div class="metric-bar-fill" style="width:90%"></div></div>
+            <span class="metric-val">$0.07</span>
+          </div>
+          <div class="accuracy-row">
+            <label>Direction acc.</label>
+            <div class="metric-bar-wrap"><div class="metric-bar-fill" style="width:49%;background:var(--muted)"></div></div>
+            <span class="metric-val">48.9%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- HOW IT WORKS -->
+<section id="model">
+  <div class="section-inner">
+    <div class="section-label">Architecture</div>
+    <h2 class="section-title">How the model works</h2>
+    <p class="section-sub">A deep learning ensemble combining Convolutional and Recurrent neural networks, trained on 23 technical indicators across 25 years of market data.</p>
+
+    <div class="how-grid">
+      <div class="how-card">
+        <div class="how-step">STEP 01 · DATA</div>
+        <div class="how-title">25 years of market data</div>
+        <div class="how-desc">6,400+ trading days per metal from Yahoo Finance. Covers multiple market cycles, crises, bull and bear markets from 2000 to 2026.</div>
+      </div>
+      <div class="how-card">
+        <div class="how-step">STEP 02 · FEATURES</div>
+        <div class="how-title">23 technical indicators</div>
+        <div class="how-desc">RSI, MACD, Bollinger Bands, ATR, EMA crossovers, volume signals, price momentum across 1, 3, 7, 14 and 30 day windows.</div>
+      </div>
+      <div class="how-card">
+        <div class="how-step">STEP 03 · CNN</div>
+        <div class="how-title">Pattern detection</div>
+        <div class="how-desc">Convolutional layers scan 3-day windows across 60 days of data. 128 filters identify local price patterns like RSI divergences and volume spikes.</div>
+      </div>
+      <div class="how-card">
+        <div class="how-step">STEP 04 · LSTM</div>
+        <div class="how-title">Sequence memory</div>
+        <div class="how-desc">Long Short-Term Memory layers read CNN patterns in sequence. Connects short-term signals to long-term behaviour learned from 25 years of history.</div>
+      </div>
+      <div class="how-card">
+        <div class="how-step">STEP 05 · INTERVALS</div>
+        <div class="how-title">4 dedicated models</div>
+        <div class="how-desc">Separate CNN+LSTM model trained for each time horizon. 1-week model optimised for weekly patterns, 6-month model for macro trends.</div>
+      </div>
+      <div class="how-card">
+        <div class="how-step">STEP 06 · OUTPUT</div>
+        <div class="how-title">Price + confidence range</div>
+        <div class="how-desc">Model outputs predicted return percentage, converted to price. Confidence range shows low and high estimates for risk assessment purposes.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- DISCLAIMER -->
+<div class="disclaimer">
+  <strong>Disclaimer:</strong> MetalsMind is for educational and research purposes only. Predictions are generated by machine learning models trained on historical data and do not constitute financial advice. Past performance does not guarantee future results. Always consult a qualified financial advisor before making investment decisions. Prices shown are indicative and may not reflect current market conditions.
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-left">Metals<span style="font-style:italic">Mind</span></div>
+  <div class="footer-right">CNN + LSTM · Trained on 25 years of data · Gold · Silver · Copper</div>
+</footer>
+
+<script>
+// ── DATA ──────────────────────────────────────────────────────────
+const METALS = {
+  gold: {
+    name: 'Gold', symbol: 'XAU/USD', unit: 'per troy oz',
+    color: '#C9952A', colorL: '#F0C060',
+    current: 4172.90,
+    predictions: {
+      '1w':  { price: 4198.80, ret: +0.62, low: 4072.95, high: 4324.65, r2: 99.79 },
+      '4w':  { price: 4250.30, ret: +1.87, low: 4122.79, high: 4377.81, r2: 99.79 },
+      '3m':  { price: 4389.20, ret: +5.20, low: 4257.52, high: 4520.88, r2: 99.79 },
+      '6m':  { price: 4521.00, ret: +8.33, low: 4385.37, high: 4656.63, r2: 99.79 },
+    },
+    history: [2800,2850,2900,2880,2950,3000,3100,3200,3300,3400,3500,3600,3700,3800,3900,4000,4050,4100,4120,4150,4172]
+  },
+  silver: {
+    name: 'Silver', symbol: 'XAG/USD', unit: 'per troy oz',
+    color: '#A8B4C8', colorL: '#D0D8E8',
+    current: 66.319,
+    predictions: {
+      '1w':  { price: 66.916, ret: +0.90, low: 64.909, high: 68.924, r2: 99.27 },
+      '4w':  { price: 66.858, ret: +0.81, low: 64.853, high: 68.864, r2: 99.27 },
+      '3m':  { price: 71.590, ret: +7.95, low: 69.442, high: 73.737, r2: 99.27 },
+      '6m':  { price: 59.555, ret: -10.20, low: 57.769, high: 61.342, r2: 99.27 },
+    },
+    history: [28,30,32,31,34,36,38,40,42,45,48,50,52,55,57,60,62,63,64,65,66.319]
+  },
+  copper: {
+    name: 'Copper', symbol: 'HG/USD', unit: 'per pound',
+    color: '#C07848', colorL: '#E0A878',
+    current: 6.337,
+    predictions: {
+      '1w':  { price: 6.495, ret: +2.50, low: 6.300, high: 6.690, r2: 98.25 },
+      '4w':  { price: 6.600, ret: +4.15, low: 6.402, high: 6.798, r2: 98.25 },
+      '3m':  { price: 6.666, ret: +5.20, low: 6.466, high: 6.866, r2: 98.25 },
+      '6m':  { price: 6.800, ret: +7.30, low: 6.596, high: 7.004, r2: 98.25 },
+    },
+    history: [2.5,2.8,3.0,2.9,3.2,3.5,3.8,4.0,4.2,4.5,4.8,5.0,5.2,5.5,5.7,5.9,6.0,6.1,6.2,6.3,6.337]
+  }
+};
+
+const INTERVAL_LABELS = { '1w':'1 Week', '4w':'4 Weeks', '3m':'3 Months', '6m':'6 Months' };
+const INTERVAL_DAYS   = { '1w': 5, '4w': 21, '3m': 63, '6m': 126 };
+
+let currentMetal    = 'gold';
+let currentInterval = '1w';
+let chart           = null;
+
+// ── CHART ─────────────────────────────────────────────────────────
+function buildChartData(metal, interval) {
+  const m   = METALS[metal];
+  const p   = m.predictions[interval];
+  const days = INTERVAL_DAYS[interval];
+  const hist = m.history;
+
+  // labels
+  const labels = hist.map((_,i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (hist.length - 1 - i) * 7);
+    return d.toLocaleDateString('en-GB', { month:'short', year:'2-digit' });
+  });
+
+  // forecast points
+  const forecastLabels = [];
+  const d = new Date();
+  const steps = Math.min(6, Math.ceil(days / 5));
+  for (let i = 1; i <= steps; i++) {
+    const fd = new Date(d);
+    fd.setDate(fd.getDate() + Math.round(days * i / steps));
+    forecastLabels.push(fd.toLocaleDateString('en-GB', { month:'short', year:'2-digit' }));
+  }
+
+  const allLabels = [...labels, ...forecastLabels];
+
+  // historical data — null for forecast positions
+  const histData = [...hist.map(v => v), ...forecastLabels.map(() => null)];
+
+  // forecast data — null for history positions, linear interpolation to target
+  const forecastData = hist.map(() => null);
+  forecastData[hist.length - 1] = m.current; // connect at today
+  const step = (p.price - m.current) / steps;
+  for (let i = 0; i < steps; i++) {
+    forecastData.push(+(m.current + step * (i + 1)).toFixed(3));
+  }
+
+  // low/high bands
+  const bandData = hist.map(() => null);
+  bandData[hist.length - 1] = m.current;
+  const stepLow  = (p.low  - m.current) / steps;
+  const stepHigh = (p.high - m.current) / steps;
+  const lowData  = [...hist.map(()=>null)];
+  const highData = [...hist.map(()=>null)];
+  lowData[hist.length-1]  = m.current;
+  highData[hist.length-1] = m.current;
+  for (let i = 0; i < steps; i++) {
+    lowData.push(+(m.current + stepLow  * (i+1)).toFixed(3));
+    highData.push(+(m.current + stepHigh * (i+1)).toFixed(3));
+  }
+
+  return { allLabels, histData, forecastData, lowData, highData };
+}
+
+function renderChart() {
+  const m = METALS[currentMetal];
+  const { allLabels, histData, forecastData, lowData, highData } = buildChartData(currentMetal, currentInterval);
+
+  if (chart) { chart.destroy(); chart = null; }
+
+  const ctx = document.getElementById('predChart').getContext('2d');
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: allLabels,
+      datasets: [
+        {
+          label: 'Historical',
+          data: histData,
+          borderColor: m.color,
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.35,
+          spanGaps: false,
+        },
+        {
+          label: 'Forecast',
+          data: forecastData,
+          borderColor: '#3DBE8A',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          borderDash: [5, 4],
+          pointRadius: 0,
+          tension: 0.3,
+          spanGaps: false,
+        },
+        {
+          label: 'High',
+          data: highData,
+          borderColor: 'rgba(61,190,138,0.25)',
+          backgroundColor: 'rgba(61,190,138,0.06)',
+          borderWidth: 1,
+          pointRadius: 0,
+          fill: '+1',
+          tension: 0.3,
+          spanGaps: false,
+        },
+        {
+          label: 'Low',
+          data: lowData,
+          borderColor: 'rgba(61,190,138,0.25)',
+          backgroundColor: 'transparent',
+          borderWidth: 1,
+          pointRadius: 0,
+          tension: 0.3,
+          spanGaps: false,
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#12121A',
+          borderColor: '#2A2A3A',
+          borderWidth: 1,
+          titleColor: '#8888A8',
+          bodyColor: '#E8E8F0',
+          padding: 10,
+          callbacks: {
+            label: ctx => {
+              if (ctx.raw === null) return null;
+              const dp = currentMetal === 'copper' ? 3 : 2;
+              return ` ${ctx.dataset.label}: $${ctx.raw.toLocaleString('en-US', {minimumFractionDigits:dp,maximumFractionDigits:dp})}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,0.03)' },
+          ticks: { color: '#55556A', font: { size: 10, family: 'DM Mono' }, maxTicksLimit: 8 }
+        },
+        y: {
+          grid: { color: 'rgba(255,255,255,0.03)' },
+          ticks: {
+            color: '#55556A', font: { size: 10, family: 'DM Mono' }, maxTicksLimit: 6,
+            callback: v => '$' + v.toLocaleString()
+          }
+        }
+      }
+    }
+  });
+}
+
+// ── UI UPDATE ─────────────────────────────────────────────────────
+function updateUI() {
+  const m = METALS[currentMetal];
+  const p = m.predictions[currentInterval];
+  const dp = currentMetal === 'copper' ? 3 : 2;
+  const fmt = v => v.toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp });
+
+  document.getElementById('pred-metal-name').textContent  = m.name;
+  document.getElementById('pred-interval-badge').textContent = INTERVAL_LABELS[currentInterval] + ' Forecast';
+  document.getElementById('pred-current').textContent = '$' + fmt(m.current);
+  document.getElementById('pred-price').textContent   = '$' + fmt(p.price);
+  document.getElementById('pred-price').className = 'val ' + (p.ret >= 0 ? 'up' : 'down');
+
+  const retStr = (p.ret >= 0 ? '+' : '') + p.ret.toFixed(2) + '%';
+  document.getElementById('pred-return').textContent = retStr;
+  document.getElementById('pred-return').className = 'val ' + (p.ret >= 0 ? 'up' : 'down');
+
+  document.getElementById('pred-low').textContent  = '$' + fmt(p.low);
+  document.getElementById('pred-high').textContent = '$' + fmt(p.high);
+
+  // range marker position
+  const range = p.high - p.low;
+  const pos   = range > 0 ? ((p.price - p.low) / range * 100) : 50;
+  document.getElementById('range-marker').style.left = pos + '%';
+
+  document.getElementById('conf-fill').style.width = p.r2 + '%';
+  document.getElementById('conf-label').textContent = p.r2.toFixed(2) + '% — R² on test data';
+  document.getElementById('chart-title').textContent = m.name + ' — Historical + ' + INTERVAL_LABELS[currentInterval] + ' Forecast';
+
+  renderChart();
+}
+
+function selectMetal(metal) {
+  currentMetal = metal;
+  document.querySelectorAll('.metal-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.' + metal + '-btn').classList.add('active');
+  updateUI();
+}
+
+function selectInterval(intv) {
+  currentInterval = intv;
+  document.querySelectorAll('.interval-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  updateUI();
+}
+
+// init
+updateUI();
+</script>
+</body>
+</html>
